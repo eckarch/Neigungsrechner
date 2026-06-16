@@ -1,967 +1,698 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <link rel="icon" type="image/png" href="favicon.png">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Neigungsrechner — Architektur & Bau</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+import { useState, useMemo, useEffect } from "react";
 
-:root{
-  --bg:#111115;
-  --surface:#18181D;
-  --surface2:#1F1F26;
-  --surface3:#26262F;
-  --border:#2B2B36;
-  --border2:#363644;
-  --accent:#E08B10;
-  --accent-l:#F0AA40;
-  --accent-bg:rgba(224,139,16,0.09);
-  --accent-bg2:rgba(224,139,16,0.04);
-  --text:#E6E3D8;
-  --text-dim:#56544E;
-  --text-mid:#908D83;
-  --green:#5DB86A;
-  --yellow:#E8C040;
-  --red:#D95555;
-  --orange:#E07730;
-  --ff-d:'Barlow Condensed',sans-serif;
-  --ff-m:'JetBrains Mono',monospace;
-}
+export default function RampCalculator() {
+  const [tab, setTab] = useState("calc");
 
-html{font-size:16px;scroll-behavior:smooth}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--ff-d);
-  min-height:100vh;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.012) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,0.012) 1px,transparent 1px);
-  background-size:44px 44px;
-}
+  const [unit, setUnit] = useState("cm");
+  const [slopeUnit, setSlopeUnit] = useState("%");
 
-/* ── HEADER ── */
-header{
-  border-bottom:1px solid var(--border);
-  padding:1.1rem 2rem;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  background:rgba(17,17,21,0.97);
-  position:sticky;top:0;z-index:100;
-  backdrop-filter:blur(8px);
-}
-.logo{display:flex;align-items:baseline;gap:.8rem}
-.logo-title{
-  font-size:1.4rem;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;
-  background:linear-gradient(90deg,var(--text) 60%,var(--accent-l));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-}
-.logo-sub{font-size:.75rem;color:var(--text-dim);letter-spacing:.18em;text-transform:uppercase}
-.header-tag{
-  font-family:var(--ff-m);font-size:.65rem;color:var(--accent);
-  border:1px solid rgba(224,139,16,.35);
-  padding:.2rem .65rem;letter-spacing:.1em;
-  background:var(--accent-bg2);
-}
+  const [height, setHeight] = useState("");
+  const [length, setLength] = useState("");
+  const [slope, setSlope] = useState("");
 
-/* ── CONTAINER ── */
-.container{max-width:1060px;margin:0 auto;padding:2rem}
+  const [showLanding, setShowLanding] = useState(true);
+  const [maxRun, setMaxRun] = useState("600");
+  const [landingLen, setLandingLen] = useState("150");
+  const [crossSlope, setCrossSlope] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [editor, setEditor] = useState("");
+  const [copied, setCopied] = useState(false);
 
-/* ── GAUGE ── */
-.gauge-wrap{
-  margin-bottom:1.8rem;
-  background:var(--surface);
-  border:1px solid var(--border);
-  padding:1.2rem 1.5rem 1rem;
-}
-.gauge-header{
-  display:flex;justify-content:space-between;align-items:center;
-  margin-bottom:.9rem;
-}
-.gauge-title{font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--text-dim)}
-.gauge-readout{
-  font-family:var(--ff-m);font-size:.8rem;color:var(--accent);
-  letter-spacing:.05em;
-}
-.gauge-track{
-  position:relative;height:14px;
-  background:linear-gradient(90deg,
-    #2E5E2E 0%,
-    #5DB86A 6.7%,        /* 0–6° green */
-    #8FB830 11.1%,       /* 6–10° yellow-green */
-    #E8C040 22.2%,       /* 10–20° yellow */
-    #E07730 33.3%,       /* 20–30° orange */
-    #D95555 55.5%,       /* 30–50° red */
-    #8B2020 100%         /* 50–90° dark red */
-  );
-  border-radius:2px;overflow:visible;
-}
-.gauge-marker{
-  position:absolute;top:-6px;
-  width:3px;height:26px;
-  background:var(--text);
-  border-radius:1px;
-  transform:translateX(-50%);
-  transition:left .15s ease;
-  display:none;
-  box-shadow:0 0 8px rgba(255,255,255,.4);
-}
-.gauge-marker-tip{
-  position:absolute;top:-16px;left:50%;transform:translateX(-50%);
-  font-family:var(--ff-m);font-size:.7rem;font-weight:600;
-  color:var(--text);white-space:nowrap;
-  background:var(--surface3);
-  padding:.15rem .4rem;border:1px solid var(--border2);
-}
-.gauge-ticks{
-  display:flex;margin-top:.45rem;
-  position:relative;
-}
-.gauge-tick{
-  position:absolute;transform:translateX(-50%);
-  font-size:.6rem;letter-spacing:.05em;
-  color:var(--text-dim);
-  font-family:var(--ff-m);
-  white-space:nowrap;
-}
+  const parseLength = (raw) => {
+    if (raw == null) return null;
+    let s = String(raw).trim().toLowerCase().replace(",", ".");
+    if (s === "") return null;
+    const m = s.match(/^(-?\d*\.?\d+)\s*(mm|cm|m|in|zoll|inch|\u0022)?$/);
+    if (!m) return null;
+    let v = parseFloat(m[1]);
+    if (isNaN(v)) return null;
+    const u = m[2];
+    if (u === "mm") return v / 10;
+    if (u === "cm") return v;
+    if (u === "m") return v * 100;
+    if (u === "in" || u === "\u0022" || u === "zoll" || u === "inch") return v * 2.54;
+    return unit === "m" ? v * 100 : v;
+  };
 
-/* ── BIG DISPLAY ── */
-.display-row{
-  display:grid;grid-template-columns:repeat(3,1fr);
-  gap:1px;background:var(--border);
-  border:1px solid var(--border);
-  margin-bottom:1.8rem;
-}
-.display-cell{
-  background:var(--surface);
-  padding:1.2rem 1.5rem;
-  text-align:center;
-}
-.display-label{
-  font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--text-dim);margin-bottom:.4rem;
-}
-.display-value{
-  font-family:var(--ff-m);font-size:2.4rem;font-weight:600;
-  color:var(--accent-l);line-height:1;
-  transition:color .2s;
-}
-.display-value.na{color:var(--border2)}
-.display-unit{font-family:var(--ff-m);font-size:.8rem;color:var(--text-dim);margin-top:.2rem}
+  const degToPct = (deg) => Math.tan(deg * Math.PI / 180) * 100;
+  const pctToDeg = (pct) => Math.atan(pct / 100) * 180 / Math.PI;
 
-/* ── UNIT BAR ── */
-.row-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem}
-.row-label{font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--text-dim)}
-.unit-bar{display:flex;gap:0;margin-bottom:1.5rem}
-.unit-btn{
-  flex:1;background:var(--surface2);border:1px solid var(--border);border-right:none;
-  color:var(--text-dim);font-family:var(--ff-d);
-  font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
-  padding:.45rem .2rem;cursor:pointer;transition:all .12s;
-}
-.unit-btn:last-child{border-right:1px solid var(--border)}
-.unit-btn.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-l);z-index:1}
-.unit-btn:hover:not(.active){background:var(--surface3);color:var(--text-mid)}
+  const parseSlope = (raw) => {
+    if (raw == null) return null;
+    let s = String(raw).trim().toLowerCase().replace(",", ".");
+    if (s === "") return null;
+    const m = s.match(/^(-?\d*\.?\d+)\s*(%|°|deg|grad)?$/);
+    if (!m) return null;
+    let v = parseFloat(m[1]);
+    if (isNaN(v)) return null;
+    const u = m[2];
+    if (u === "%") return v;
+    if (u === "°" || u === "deg" || u === "grad") return degToPct(v);
+    return slopeUnit === "°" ? degToPct(v) : v;
+  };
 
-/* ── CALC GRID ── */
-.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+  const detectSlopeUnit = (raw) => {
+    const s = String(raw).trim().toLowerCase();
+    if (/%\s*$/.test(s)) return "%";
+    if (/(°|deg|grad)\s*$/.test(s)) return "°";
+    return null;
+  };
 
-.calc-panel{background:var(--surface);border:1px solid var(--border);padding:1.3rem}
-.panel-title{
-  font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--accent);margin-bottom:1.1rem;padding-bottom:.7rem;
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:.5rem;
-}
-.panel-icon{font-size:.9rem}
+  useEffect(() => {
+    const detected = detectSlopeUnit(slope);
+    if (detected && detected !== slopeUnit) setSlopeUnit(detected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slope]);
 
-/* Field */
-.field{margin-bottom:.9rem}
-.field:last-child{margin-bottom:0}
-.field-lbl{
-  font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--text-mid);margin-bottom:.35rem;
-  display:flex;justify-content:space-between;align-items:center;
-}
-.field-hint{color:var(--text-dim);font-size:.62rem;font-style:italic;letter-spacing:.05em;font-weight:300}
-.field-row{display:flex}
-.inp{
-  flex:1;background:var(--surface2);
-  border:1px solid var(--border);border-right:none;
-  color:var(--text);font-family:var(--ff-m);font-size:.95rem;
-  padding:.55rem .8rem;outline:none;transition:border-color .12s,background .12s;
-  -moz-appearance:textfield;
-}
-.inp::-webkit-outer-spin-button,.inp::-webkit-inner-spin-button{-webkit-appearance:none}
-.inp:focus{border-color:var(--accent);background:rgba(224,139,16,.04)}
-.inp.computed{color:var(--text-mid)}
-.inp-prefix{
-  background:var(--surface3);border:1px solid var(--border);border-right:none;
-  color:var(--text-dim);font-family:var(--ff-m);font-size:.8rem;
-  padding:.55rem .7rem;display:flex;align-items:center;white-space:nowrap;
-}
-.inp-unit{
-  background:var(--border);border:1px solid var(--border);
-  color:var(--text-dim);font-family:var(--ff-m);font-size:.75rem;
-  padding:.55rem .65rem;display:flex;align-items:center;white-space:nowrap;
-  letter-spacing:.05em;
-}
+  const round = (n, d) => {
+    if (n == null || isNaN(n)) return n;
+    const f = Math.pow(10, d);
+    return Math.round(n * f) / f;
+  };
 
-/* ── DIAGRAM ── */
-.diagram-panel{
-  background:var(--surface);border:1px solid var(--border);
-  padding:1.3rem;margin-bottom:1.5rem;
-}
-#slope-svg{width:100%;height:190px;display:block}
-
-/* ── STATUS BAR ── */
-.status-bar{
-  display:flex;align-items:center;gap:.8rem;
-  background:var(--surface);border:1px solid var(--border);
-  padding:.7rem 1rem;margin-bottom:2rem;
-  flex-wrap:wrap;
-}
-.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
-.status-text{font-size:.78rem;color:var(--text-mid);flex:1;min-width:200px}
-.status-badges{display:flex;gap:.4rem;flex-wrap:wrap}
-.sbadge{
-  font-family:var(--ff-m);font-size:.62rem;
-  padding:.18rem .5rem;border:1px solid;letter-spacing:.05em;
-}
-.sbadge.ok{color:var(--green);border-color:var(--green);background:rgba(93,184,106,.08)}
-.sbadge.warn{color:var(--yellow);border-color:var(--yellow);background:rgba(232,192,64,.08)}
-.sbadge.no{color:var(--red);border-color:var(--red);background:rgba(217,85,85,.08)}
-
-/* ── REFERENCE ── */
-.ref-tabs{display:flex;border-bottom:1px solid var(--border)}
-.ref-tab{
-  font-family:var(--ff-d);font-size:.72rem;letter-spacing:.18em;
-  text-transform:uppercase;padding:.65rem 1.3rem;cursor:pointer;
-  color:var(--text-dim);background:none;
-  border:1px solid transparent;border-bottom:none;
-  transition:all .12s;
-}
-.ref-tab.active{
-  color:var(--text);border-color:var(--border);
-  background:var(--surface);
-  position:relative;top:1px;
-}
-.ref-tab:hover:not(.active){color:var(--text-mid)}
-.ref-panel{display:none;background:var(--surface);border:1px solid var(--border);border-top:none;padding:1.4rem}
-.ref-panel.active{display:block}
-.ref-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:1rem}
-.ref-card{border:1px solid var(--border);padding:1rem 1.1rem;background:var(--surface2)}
-.ref-card-title{
-  font-size:.64rem;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--accent);margin-bottom:.8rem;
-  padding-bottom:.6rem;border-bottom:1px solid var(--border);
-}
-.ref-item{
-  display:flex;justify-content:space-between;align-items:baseline;
-  padding:.3rem 0;border-bottom:1px solid rgba(43,43,54,.7);
-  font-size:.82rem;gap:.5rem;
-}
-.ref-item:last-child{border-bottom:none}
-.ri-label{color:var(--text-mid);flex:1}
-.ri-vals{display:flex;gap:.4rem;font-family:var(--ff-m);font-size:.72rem;flex-shrink:0}
-.cg{color:var(--green)}.cy{color:var(--yellow)}.cr{color:var(--red)}.co{color:var(--orange)}
-.cd{color:var(--text-dim)}
-.ref-note{
-  font-size:.72rem;color:var(--text-dim);line-height:1.6;
-  margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--border);
-}
-
-/* ── RESET ── */
-.reset-btn{
-  background:none;border:1px solid var(--border);
-  color:var(--text-dim);font-family:var(--ff-d);
-  font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;
-  padding:.38rem .9rem;cursor:pointer;transition:all .12s;
-}
-.reset-btn:hover{border-color:var(--text-mid);color:var(--text)}
-
-/* ── FOOTER ── */
-footer{
-  text-align:center;padding:1.5rem 0 2rem;
-  font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--text-dim);
-}
-
-/* ── RESPONSIVE ── */
-@media(max-width:680px){
-  .container{padding:1rem}
-  .calc-grid{grid-template-columns:1fr;gap:1rem}
-  .display-value{font-size:1.7rem}
-  .header-tag{display:none}
-  .ref-tab{padding:.55rem .8rem;font-size:.65rem}
-  header{padding:.9rem 1rem}
-}
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo">
-    <span class="logo-title">Neigungsrechner</span>
-    <span class="logo-sub">Gefälle · Steigung · Winkel</span>
-  </div>
-  <span class="header-tag">Architektur &amp; Bau</span>
-</header>
-
-<div class="container">
-
-  <!-- Gauge -->
-  <div class="gauge-wrap">
-    <div class="gauge-header">
-      <span class="gauge-title">Neigungsindikator  0° → 90°</span>
-      <span class="gauge-readout" id="gauge-readout">— keine Eingabe —</span>
-    </div>
-    <div class="gauge-track">
-      <div class="gauge-marker" id="gauge-marker">
-        <div class="gauge-marker-tip" id="gauge-tip">—</div>
-      </div>
-    </div>
-    <div style="position:relative;height:18px;margin-top:4px">
-      <span class="gauge-tick" style="left:0%">0°</span>
-      <span class="gauge-tick" style="left:6.7%">6°</span>
-      <span class="gauge-tick" style="left:11.1%">10°</span>
-      <span class="gauge-tick" style="left:22.2%">20°</span>
-      <span class="gauge-tick" style="left:33.3%">30°</span>
-      <span class="gauge-tick" style="left:50%">45°</span>
-      <span class="gauge-tick" style="left:66.7%">60°</span>
-      <span class="gauge-tick" style="left:100%;transform:translateX(-100%)">90°</span>
-    </div>
-  </div>
-
-  <!-- Big display -->
-  <div class="display-row">
-    <div class="display-cell">
-      <div class="display-label">Neigungswinkel</div>
-      <div class="display-value na" id="disp-deg">—</div>
-      <div class="display-unit">Grad °</div>
-    </div>
-    <div class="display-cell">
-      <div class="display-label">Gefälle / Steigung</div>
-      <div class="display-value na" id="disp-pct">—</div>
-      <div class="display-unit">Prozent %</div>
-    </div>
-    <div class="display-cell">
-      <div class="display-label">Verhältnis</div>
-      <div class="display-value na" id="disp-ratio">—</div>
-      <div class="display-unit">1 : x</div>
-    </div>
-  </div>
-
-  <!-- Row: label + reset -->
-  <div class="row-meta">
-    <span class="row-label">Längeneinheit wählen</span>
-    <button class="reset-btn" onclick="resetAll()">↺ Zurücksetzen</button>
-  </div>
-
-  <!-- Unit bar -->
-  <div class="unit-bar">
-    <button class="unit-btn active" onclick="setUnit('m',this)">m</button>
-    <button class="unit-btn" onclick="setUnit('cm',this)">cm</button>
-    <button class="unit-btn" onclick="setUnit('mm',this)">mm</button>
-    <button class="unit-btn" onclick="setUnit('ft',this)">ft</button>
-    <button class="unit-btn" onclick="setUnit('in',this)">in</button>
-  </div>
-
-  <!-- Calc grid -->
-  <div class="calc-grid">
-
-    <!-- Slope panel -->
-    <div class="calc-panel">
-      <div class="panel-title"><span class="panel-icon">△</span> Neigung definieren</div>
-
-      <div class="field">
-        <div class="field-lbl">Winkel <span class="field-hint">atan(H / L)</span></div>
-        <div class="field-row">
-          <input type="number" class="inp" id="inp-deg" placeholder="z.B. 5.71" step="any" oninput="onInput('deg')" onchange="onInput('deg')">
-          <div class="inp-unit">°</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="field-lbl">Prozent <span class="field-hint">H / L × 100</span></div>
-        <div class="field-row">
-          <input type="number" class="inp" id="inp-pct" placeholder="z.B. 10.00" step="any" oninput="onInput('pct')" onchange="onInput('pct')">
-          <div class="inp-unit">%</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="field-lbl">Verhältnis <span class="field-hint">L / H = 1 : x</span></div>
-        <div class="field-row">
-          <div class="inp-prefix">1 :</div>
-          <input type="number" class="inp" id="inp-ratio" placeholder="z.B. 10" step="any" oninput="onInput('ratio')" onchange="onInput('ratio')" style="border-left:none">
-          <div class="inp-unit">—</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Length panel -->
-    <div class="calc-panel">
-      <div class="panel-title"><span class="panel-icon">◫</span> Längen eingeben</div>
-
-      <div class="field">
-        <div class="field-lbl">Horizontale Länge <span class="field-hint">Grundlinie / Lauf</span></div>
-        <div class="field-row">
-          <input type="number" class="inp" id="inp-run" placeholder="z.B. 5.000" step="any" oninput="onInput('run')" onchange="onInput('run')">
-          <div class="inp-unit" id="unit-run">m</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="field-lbl">Höhendifferenz <span class="field-hint">Steig- / Fallhöhe</span></div>
-        <div class="field-row">
-          <input type="number" class="inp" id="inp-rise" placeholder="z.B. 0.500" step="any" oninput="onInput('rise')" onchange="onInput('rise')">
-          <div class="inp-unit" id="unit-rise">m</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="field-lbl">Schräglänge <span class="field-hint">Hypotenuse</span></div>
-        <div class="field-row">
-          <input type="number" class="inp" id="inp-hyp" placeholder="z.B. 5.025" step="any" oninput="onInput('hyp')" onchange="onInput('hyp')">
-          <div class="inp-unit" id="unit-hyp">m</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Diagram -->
-  <div class="diagram-panel">
-    <div class="panel-title"><span class="panel-icon">⬡</span> Visualisierung</div>
-    <svg id="slope-svg" viewBox="0 0 620 190" xmlns="http://www.w3.org/2000/svg"></svg>
-  </div>
-
-  <!-- Status bar -->
-  <div class="status-bar">
-    <div class="status-dot" id="sdot"></div>
-    <div class="status-text" id="stext">Bitte einen Wert eingeben, um die Berechnung zu starten.</div>
-    <div class="status-badges" id="sbadges"></div>
-  </div>
-
-  <!-- Reference -->
-  <div>
-    <div class="ref-tabs">
-      <button class="ref-tab active" onclick="showTab('rampen',this)">Rampen &amp; Wege</button>
-      <button class="ref-tab" onclick="showTab('daecher',this)">Dächer</button>
-      <button class="ref-tab" onclick="showTab('strassen',this)">Straßen &amp; Gelände</button>
-      <button class="ref-tab" onclick="showTab('tabelle',this)">Umrechnungstabelle</button>
-    </div>
-
-    <!-- Rampen -->
-    <div class="ref-panel active" id="tab-rampen">
-      <div class="ref-grid">
-        <div class="ref-card">
-          <div class="ref-card-title">♿ Barrierefreiheit — DIN 18040</div>
-          <div class="ref-item"><span class="ri-label">Max. Neigung</span><span class="ri-vals"><span class="cg">≤ 6%</span><span class="cg">≤ 3.43°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Max. Länge je Abschnitt</span><span class="ri-vals"><span class="cg">6 m</span></span></div>
-          <div class="ref-item"><span class="ri-label">Mindestbreite</span><span class="ri-vals"><span class="cg">≥ 1.20 m</span></span></div>
-          <div class="ref-item"><span class="ri-label">Podestlänge</span><span class="ri-vals"><span class="cg">≥ 1.50 m</span></span></div>
-          <div class="ref-item"><span class="ri-label">Querneigung</span><span class="ri-vals"><span class="cg">≤ 2.5%</span></span></div>
-          <div class="ref-note">Podeste bei Richtungsänderung oder alle 6 m. Beidseitige Handläufe empfohlen.</div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🚗 Garagen &amp; Stellplätze</div>
-          <div class="ref-item"><span class="ri-label">Innenrampe (max.)</span><span class="ri-vals"><span class="cg">≤ 12%</span><span class="cd">6.84°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Außenrampe (max.)</span><span class="ri-vals"><span class="cy">≤ 15%</span><span class="cd">8.53°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Kurvenbereich</span><span class="ri-vals"><span class="cy">≤ 10%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Übergangsgefälle</span><span class="ri-vals"><span class="cg">≤ 8%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Behindertenstellplatz</span><span class="ri-vals"><span class="cg">≤ 2%</span></span></div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🚒 Feuerwehrzufahrt</div>
-          <div class="ref-item"><span class="ri-label">Max. Längsneigung</span><span class="ri-vals"><span class="cy">≤ 10%</span><span class="cd">5.71°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Mindestbreite Fahrbahn</span><span class="ri-vals"><span class="cg">≥ 3.00 m</span></span></div>
-          <div class="ref-item"><span class="ri-label">Lichte Höhe</span><span class="ri-vals"><span class="cg">≥ 3.50 m</span></span></div>
-          <div class="ref-item"><span class="ri-label">Aufstellfläche (Neigung)</span><span class="ri-vals"><span class="cg">≤ 5%</span></span></div>
-          <div class="ref-note">VwV zur LBO sowie DIN 14090. Regionale Bauordnungen prüfen!</div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🚶 Fußwege &amp; Freiräume</div>
-          <div class="ref-item"><span class="ri-label">Komfort / Barrierefreiheit</span><span class="ri-vals"><span class="cg">≤ 2%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Gehweg Längsneigung</span><span class="ri-vals"><span class="cy">≤ 6%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Gehweg Querneigung</span><span class="ri-vals"><span class="cg">≤ 2.5%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Kurzzeitig (mit Geländer)</span><span class="ri-vals"><span class="cr">≤ 20%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Terrassengefälle (min.)</span><span class="ri-vals"><span class="cg">≥ 1.5–2%</span></span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dächer -->
-    <div class="ref-panel" id="tab-daecher">
-      <div class="ref-grid">
-        <div class="ref-card">
-          <div class="ref-card-title">🏠 Dachneigung nach Dachform</div>
-          <div class="ref-item"><span class="ri-label">Flachdach</span><span class="ri-vals"><span class="cy">2–5°</span><span class="cd">3.5–8.7%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Pultdach</span><span class="ri-vals"><span class="cg">5–20°</span><span class="cd">8.7–36%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Satteldach (typisch)</span><span class="ri-vals"><span class="cg">20–50°</span><span class="cd">36–119%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Walmdach</span><span class="ri-vals"><span class="cg">22–45°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Mansarddach (oben)</span><span class="ri-vals"><span class="cy">60–75°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Steildach</span><span class="ri-vals"><span class="co">&gt; 45°</span></span></div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🔩 Mindestneigung nach Deckung</div>
-          <div class="ref-item"><span class="ri-label">Bitumenbahn / EPDM</span><span class="ri-vals"><span class="cg">≥ 2°</span><span class="cd">≥ 3.5%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Stehfalz Metall</span><span class="ri-vals"><span class="cg">≥ 3°</span><span class="cd">≥ 5.2%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Trapezblech / Wellblech</span><span class="ri-vals"><span class="cg">≥ 5°</span><span class="cd">≥ 8.7%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Dachziegel (belüftet)</span><span class="ri-vals"><span class="cy">≥ 22°</span><span class="cd">≥ 40%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Dachschiefer</span><span class="ri-vals"><span class="cy">≥ 25°</span><span class="cd">≥ 47%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Reetdach</span><span class="ri-vals"><span class="cr">≥ 40–45°</span></span></div>
-          <div class="ref-note">Immer Herstellerangaben prüfen — Werte können je nach Lage (Wind/Schnee) steigen.</div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">💧 Entwässerung &amp; Gefälle</div>
-          <div class="ref-item"><span class="ri-label">Flachdach Mindestgefälle</span><span class="ri-vals"><span class="cg">≥ 2%</span><span class="cd">≥ 1.15°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Terrasse / Balkon</span><span class="ri-vals"><span class="cg">≥ 1.5–2%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Grünes Dach</span><span class="ri-vals"><span class="cg">≥ 2°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Kehlen &amp; Dachrinnen</span><span class="ri-vals"><span class="cg">≥ 0.5%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Hohlkehle innen (Attika)</span><span class="ri-vals"><span class="cg">≥ 1.5%</span></span></div>
-          <div class="ref-note">Flachdachrichtlinien ZVDH / Fachregel des Dachdeckerhandwerks beachten.</div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">☀️ Solarthermie / PV</div>
-          <div class="ref-item"><span class="ri-label">Optimale PV-Neigung (DE)</span><span class="ri-vals"><span class="cg">30–35°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Akzeptabler Bereich PV</span><span class="ri-vals"><span class="cy">15–55°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Solarthermie (optimal)</span><span class="ri-vals"><span class="cg">35–45°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Flachdach-Aufständerung</span><span class="ri-vals"><span class="cy">10–15°</span></span></div>
-          <div class="ref-note">Optimale Neigung abhängig von geografischer Breite und Ausrichtung (Süd = ideal).</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Straßen -->
-    <div class="ref-panel" id="tab-strassen">
-      <div class="ref-grid">
-        <div class="ref-card">
-          <div class="ref-card-title">🛣️ Straßen — RASt / RAL</div>
-          <div class="ref-item"><span class="ri-label">Autobahn (max.)</span><span class="ri-vals"><span class="cg">≤ 4%</span><span class="cd">2.29°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Bundesstraße außerorts</span><span class="ri-vals"><span class="cg">≤ 8%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Innerorts Hauptstraße</span><span class="ri-vals"><span class="cy">≤ 10%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Erschließungsstraße</span><span class="ri-vals"><span class="cy">≤ 15%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Querneigung Fahrbahn</span><span class="ri-vals"><span class="cg">2–6%</span></span></div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🏔️ Gelände &amp; Böschungen</div>
-          <div class="ref-item"><span class="ri-label">Rasen mähbar (Maschine)</span><span class="ri-vals"><span class="cg">≤ 33%</span><span class="cd">18°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Handmäher möglich</span><span class="ri-vals"><span class="cy">≤ 50%</span><span class="cd">27°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Schüttwinkel Sand/Kies</span><span class="ri-vals"><span class="cy">~30–35°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Stützkonstruktion nötig</span><span class="ri-vals"><span class="cr">&gt; 45°</span></span></div>
-          <div class="ref-note">Ohne ingenieurbiologische Maßnahmen gelten niedrigere Grenzwerte für Erdbau.</div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🅿️ Stellplätze &amp; Zufahrten</div>
-          <div class="ref-item"><span class="ri-label">Stellplatz Querneigung</span><span class="ri-vals"><span class="cg">≤ 3%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Stellplatz Längsneigung</span><span class="ri-vals"><span class="cg">≤ 3%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Entwässerungsgefälle</span><span class="ri-vals"><span class="cg">≥ 1.5–2%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Zufahrt Wohngebäude</span><span class="ri-vals"><span class="cy">≤ 12%</span></span></div>
-          <div class="ref-item"><span class="ri-label">Fahrradweg (Längs)</span><span class="ri-vals"><span class="cg">≤ 5%</span></span></div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🏗️ Baugruben &amp; Gelände</div>
-          <div class="ref-item"><span class="ri-label">Böschungswinkel Klasse 1</span><span class="ri-vals"><span class="cg">≤ 45°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Böschungswinkel Klasse 2</span><span class="ri-vals"><span class="cy">≤ 60°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Böschungswinkel Klasse 3</span><span class="ri-vals"><span class="co">≤ 80°</span></span></div>
-          <div class="ref-item"><span class="ri-label">Geländemodell Rampe</span><span class="ri-vals"><span class="cg">1:3 = 33%</span></span></div>
-          <div class="ref-note">DIN 4124 (Baugruben und Gräben). Bodenklasse und Grundwasser beachten!</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabelle -->
-    <div class="ref-panel" id="tab-tabelle">
-      <div class="ref-grid">
-        <div class="ref-card">
-          <div class="ref-card-title">📊 Grad → % → Verhältnis</div>
-          <div class="ref-item"><span class="ri-label">1°</span><span class="ri-vals"><span class="cd">1.75%</span><span class="cd">1:57.3</span></span></div>
-          <div class="ref-item"><span class="ri-label">2°</span><span class="ri-vals"><span class="cd">3.49%</span><span class="cd">1:28.6</span></span></div>
-          <div class="ref-item"><span class="ri-label">3.43° (6%)</span><span class="ri-vals"><span class="cg">6.00%</span><span class="cg">1:16.7</span></span></div>
-          <div class="ref-item"><span class="ri-label">5°</span><span class="ri-vals"><span class="cd">8.75%</span><span class="cd">1:11.4</span></span></div>
-          <div class="ref-item"><span class="ri-label">5.71° (10%)</span><span class="ri-vals"><span class="cy">10.00%</span><span class="cy">1:10.0</span></span></div>
-          <div class="ref-item"><span class="ri-label">10°</span><span class="ri-vals"><span class="cd">17.63%</span><span class="cd">1:5.67</span></span></div>
-          <div class="ref-item"><span class="ri-label">15°</span><span class="ri-vals"><span class="cd">26.79%</span><span class="cd">1:3.73</span></span></div>
-          <div class="ref-item"><span class="ri-label">22°</span><span class="ri-vals"><span class="cd">40.40%</span><span class="cd">1:2.48</span></span></div>
-          <div class="ref-item"><span class="ri-label">26.57° (50%)</span><span class="ri-vals"><span class="co">50.00%</span><span class="co">1:2.0</span></span></div>
-          <div class="ref-item"><span class="ri-label">30°</span><span class="ri-vals"><span class="cd">57.74%</span><span class="cd">1:1.73</span></span></div>
-          <div class="ref-item"><span class="ri-label">35°</span><span class="ri-vals"><span class="cd">70.02%</span><span class="cd">1:1.43</span></span></div>
-          <div class="ref-item"><span class="ri-label">45° (100%)</span><span class="ri-vals"><span class="cr">100.00%</span><span class="cr">1:1.0</span></span></div>
-          <div class="ref-item"><span class="ri-label">60°</span><span class="ri-vals"><span class="cr">173.21%</span><span class="cr">1:0.58</span></span></div>
-        </div>
-        <div class="ref-card">
-          <div class="ref-card-title">🔧 Formeln &amp; Definitionen</div>
-          <div class="ref-item"><span class="ri-label">% → Grad</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">atan(% ÷ 100)</span></div>
-          <div class="ref-item"><span class="ri-label">Grad → %</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">tan(°) × 100</span></div>
-          <div class="ref-item"><span class="ri-label">% → 1:x</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">x = 100 ÷ %</span></div>
-          <div class="ref-item"><span class="ri-label">Schräglänge</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">√(L² + H²)</span></div>
-          <div class="ref-item"><span class="ri-label">Höhe aus L + %</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">H = L × % ÷ 100</span></div>
-          <div class="ref-item"><span class="ri-label">Länge aus H + %</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">L = H × 100 ÷ %</span></div>
-          <div class="ref-item"><span class="ri-label">Lauf aus Schrägläge + °</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">L = hyp × cos(°)</span></div>
-          <div class="ref-item"><span class="ri-label">Höhe aus Schräge + °</span><span class="ri-vals" style="color:var(--text-mid);font-family:var(--ff-m);font-size:.72rem">H = hyp × sin(°)</span></div>
-          <div class="ref-note" style="font-size:.75rem;line-height:1.65">
-            <strong style="color:var(--text-mid)">Gefälle</strong> = Neigung nach unten (Entwässerung)<br>
-            <strong style="color:var(--text-mid)">Steigung</strong> = Neigung nach oben (Rampe, Treppe)<br>
-            Mathematisch identisch – nur die Richtung unterscheidet sich.<br><br>
-            Normen: DIN 18040 · DIN 18065 · RASt 06 · ZVDH · DIN 4124
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /ref -->
-
-</div><!-- /container -->
-
-<footer>Neigungsrechner · Architektur &amp; Bau · Alle Angaben ohne Gewähr · Normen immer in aktueller Fassung prüfen · Favicon by Royyan Wijaya (flaticon.com)</footer>
-
-<script>
-/* ── STATE ── */
-const userFields = new Set();
-let currentUnit = 'm';
-
-/* ── HELPERS ── */
-function gv(id){ const v=parseFloat(document.getElementById('inp-'+id).value); return isNaN(v)?null:v; }
-
-function sv(id, v){
-  const el = document.getElementById('inp-'+id);
-  if(!userFields.has(id)){
-    el.value = (v===null||isNaN(v)||!isFinite(v)) ? '' : fmt(v);
-    el.classList.toggle('computed', v!==null);
-  }
-}
-
-function fmt(v){
-  if(v===null||isNaN(v)||!isFinite(v)) return '';
-  const a=Math.abs(v);
-  let s;
-  if(a>=10000) s=v.toFixed(1);
-  else if(a>=1000) s=v.toFixed(2);
-  else if(a>=100)  s=v.toFixed(3);
-  else if(a>=10)   s=v.toFixed(4);
-  else             s=v.toFixed(5);
-  return s.replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'');
-}
-
-function fmtD(v,d=2){ return (v===null||isNaN(v))?'—':v.toFixed(d); }
-
-/* ── INPUT HANDLER ── */
-function onInput(field){
-  const el = document.getElementById('inp-'+field);
-  const v = parseFloat(el.value);
-  if(isNaN(v)||el.value.trim()==='') userFields.delete(field);
-  else userFields.add(field);
-  calculate();
-}
-
-/* ── MAIN CALCULATION ── */
-function calculate(){
-  const vals={};
-  ['deg','pct','ratio','run','rise','hyp'].forEach(f=>{
-    const v=parseFloat(document.getElementById('inp-'+f).value);
-    vals[f]=isNaN(v)?null:v;
-  });
-
-  let slope=null; // {deg, pct, ratio}
-
-  // Determine slope from user-entered fields
-  if(userFields.has('deg')&&vals.deg!==null){
-    const d=Math.max(0,Math.min(89.9999,vals.deg));
-    const p=Math.tan(d*Math.PI/180)*100;
-    slope={deg:d,pct:p,ratio:p>0?100/p:null};
-  } else if(userFields.has('pct')&&vals.pct!==null){
-    const p=Math.max(0,vals.pct);
-    const d=Math.atan(p/100)*180/Math.PI;
-    slope={deg:d,pct:p,ratio:p>0?100/p:null};
-  } else if(userFields.has('ratio')&&vals.ratio!==null){
-    const r=Math.max(0.0001,vals.ratio);
-    const p=100/r;
-    const d=Math.atan(p/100)*180/Math.PI;
-    slope={deg:d,pct:p,ratio:r};
-  } else if(userFields.has('run')&&userFields.has('rise')&&vals.run!==null&&vals.rise!==null&&vals.run>0){
-    const p=(vals.rise/vals.run)*100;
-    const d=Math.atan(p/100)*180/Math.PI;
-    slope={deg:d,pct:p,ratio:p>0?100/p:null};
-  } else if(userFields.has('run')&&userFields.has('hyp')&&vals.run!==null&&vals.hyp!==null&&vals.hyp>=vals.run){
-    const riseCalc=Math.sqrt(Math.max(0,vals.hyp*vals.hyp-vals.run*vals.run));
-    const p=(riseCalc/vals.run)*100;
-    const d=Math.atan(p/100)*180/Math.PI;
-    slope={deg:d,pct:p,ratio:p>0?100/p:null};
-  } else if(userFields.has('rise')&&userFields.has('hyp')&&vals.rise!==null&&vals.hyp!==null&&vals.hyp>=vals.rise){
-    const d=Math.asin(Math.min(1,vals.rise/vals.hyp))*180/Math.PI;
-    const p=Math.tan(d*Math.PI/180)*100;
-    slope={deg:d,pct:p,ratio:p>0?100/p:null};
-  }
-
-  // Update slope display fields
-  sv('deg', slope?slope.deg:null);
-  sv('pct', slope?slope.pct:null);
-  sv('ratio', slope?slope.ratio:null);
-
-  // Determine lengths
-  let L={run:null,rise:null,hyp:null};
-  if(slope!==null){
-    const rad=slope.deg*Math.PI/180;
-    const tanA=Math.tan(rad), cosA=Math.cos(rad), sinA=Math.sin(rad);
-    if(userFields.has('run')&&vals.run!==null){
-      L.run=vals.run; L.rise=vals.run*tanA; L.hyp=cosA>0?vals.run/cosA:null;
-    } else if(userFields.has('rise')&&vals.rise!==null){
-      L.rise=vals.rise; L.run=tanA>0?vals.rise/tanA:null; L.hyp=sinA>0?vals.rise/sinA:null;
-    } else if(userFields.has('hyp')&&vals.hyp!==null){
-      L.hyp=vals.hyp; L.run=vals.hyp*cosA; L.rise=vals.hyp*sinA;
+  const switchSlopeUnit = (target) => {
+    if (target === slopeUnit) return;
+    const pct = parseSlope(slope);
+    setSlopeUnit(target);
+    if (pct != null) {
+      if (target === "°") setSlope(round(pctToDeg(pct), 2) + " °");
+      else setSlope(round(pct, 2) + " %");
     }
-  } else {
-    // No slope — populate from user fields
-    if(userFields.has('run')&&vals.run!==null) L.run=vals.run;
-    if(userFields.has('rise')&&vals.rise!==null) L.rise=vals.rise;
-    if(userFields.has('hyp')&&vals.hyp!==null) L.hyp=vals.hyp;
-    // Compute third if two known
-    if(L.run!==null&&L.rise!==null&&!userFields.has('hyp'))
-      L.hyp=Math.sqrt(L.run*L.run+L.rise*L.rise);
-    else if(L.run!==null&&L.hyp!==null&&!userFields.has('rise'))
-      L.rise=Math.sqrt(Math.max(0,L.hyp*L.hyp-L.run*L.run));
-    else if(L.rise!==null&&L.hyp!==null&&!userFields.has('run'))
-      L.run=Math.sqrt(Math.max(0,L.hyp*L.hyp-L.rise*L.rise));
-  }
+  };
 
-  sv('run', L.run); sv('rise', L.rise); sv('hyp', L.hyp);
+  const result = useMemo(() => {
+    const h = parseLength(height);
+    const l = parseLength(length);
+    const p = parseSlope(slope);
+    const filled = [h != null, l != null, p != null].filter(Boolean).length;
 
-  // UI updates
-  updateDisplays(slope, L);
-  updateGauge(slope?slope.deg:null);
-  drawSVG(slope?slope.deg:null, L.run, L.rise, L.hyp);
-  updateStatus(slope?slope.deg:null, slope?slope.pct:null);
-}
+    if (filled === 3) return { status: "overfilled" };
+    if (filled < 2) return { status: "incomplete", filled };
 
-/* ── DISPLAYS ── */
-function updateDisplays(slope, L){
-  function setDisp(id,val,suf=''){
-    const el=document.getElementById(id);
-    if(val===null||isNaN(val)){el.textContent='—';el.classList.add('na')}
-    else{el.textContent=fmtD(val,2)+suf;el.classList.remove('na')}
-  }
-  setDisp('disp-deg', slope?slope.deg:null, '°');
-  setDisp('disp-pct', slope?slope.pct:null, '%');
-  if(slope&&slope.ratio!==null){
-    document.getElementById('disp-ratio').textContent='1:'+fmtD(slope.ratio,2);
-    document.getElementById('disp-ratio').classList.remove('na');
-  } else {
-    document.getElementById('disp-ratio').textContent='—';
-    document.getElementById('disp-ratio').classList.add('na');
-  }
-}
+    let H = h, L = l, P = p;
 
-/* ── GAUGE ── */
-function updateGauge(deg){
-  const marker=document.getElementById('gauge-marker');
-  const tip=document.getElementById('gauge-tip');
-  const readout=document.getElementById('gauge-readout');
-  if(deg===null){
-    marker.style.display='none';
-    readout.textContent='— keine Eingabe —';
-    return;
-  }
-  const pct=Math.min(Math.max(deg/90*100,0),100);
-  marker.style.display='block';
-  marker.style.left=pct+'%';
-  tip.textContent=fmtD(deg,2)+'°';
-  
-  // Color readout by steepness
-  const p=Math.tan(deg*Math.PI/180)*100;
-  let col='var(--green)';
-  if(p>15) col='var(--yellow)';
-  if(p>30) col='var(--orange)';
-  if(p>100) col='var(--red)';
-  readout.style.color=col;
-  readout.textContent=fmtD(deg,2)+'°  ·  '+fmtD(p,2)+'%';
-}
+    if (h != null && l != null) {
+      H = h; L = l;
+      if (L === 0) return { status: "error", msg: "Länge darf nicht 0 sein." };
+      P = (H / L) * 100;
+    } else if (h != null && p != null) {
+      H = h; P = p;
+      if (P === 0) return { status: "error", msg: "Neigung darf nicht 0 sein." };
+      L = (H / P) * 100;
+    } else if (l != null && p != null) {
+      L = l; P = p;
+      H = (L * P) / 100;
+    }
 
-/* ── SVG DIAGRAM ── */
-function drawSVG(angleDeg, run, rise, hyp){
-  const svg=document.getElementById('slope-svg');
-  const W=620, H=190;
-  const LP=35, RP=140, TP=30, BP=48;
-  const maxR=W-LP-RP, maxH=H-TP-BP;
+    if (H == null || L == null || P == null) return { status: "incomplete", filled };
 
-  let drawAng=(angleDeg!==null)?Math.min(Math.max(angleDeg,0.3),78):8;
-  const tanA=Math.tan(drawAng*Math.PI/180);
+    const angleDeg = pctToDeg(P);
+    const hyp = Math.sqrt(H * H + L * L);
+    const ratio = H !== 0 ? L / H : null;
 
-  let runPx=Math.min(maxR, maxH/Math.max(tanA,0.001));
-  let risePx=runPx*tanA;
-  if(risePx>maxH){risePx=maxH; runPx=tanA>0?risePx/tanA:maxR;}
+    return { status: "ok", H, L, P, angleDeg, hyp, ratio };
+  }, [height, length, slope, unit, slopeUnit]);
 
-  // Triangle vertices
-  const ox=LP, oy=TP+maxH;   // origin (angle vertex)
-  const rx=ox+runPx, ry=oy;   // right-angle corner
-  const tx=rx, ty=oy-risePx;  // top corner (apex)
+  const ok = result.status === "ok";
 
-  // Arc
-  const arcR=Math.min(46, runPx*0.22);
-  const arcX2=ox+arcR*Math.cos(drawAng*Math.PI/180);
-  const arcY2=oy-arcR*Math.sin(drawAng*Math.PI/180);
+  const landing = useMemo(() => {
+    if (!ok || !showLanding) return null;
+    const maxR = parseFloat(String(maxRun).replace(",", "."));
+    const landL = parseFloat(String(landingLen).replace(",", "."));
+    if (isNaN(maxR) || maxR <= 0) return null;
+    const segments = Math.ceil(result.L / maxR);
+    const numLandings = Math.max(0, segments - 1);
+    const totalLandingLen = numLandings * (isNaN(landL) ? 0 : landL);
+    const totalLen = result.L + totalLandingLen;
+    return { segments, numLandings, totalLandingLen, totalLen };
+  }, [ok, result, showLanding, maxRun, landingLen]);
 
-  const fmtL=v=>(v!==null&&!isNaN(v)&&isFinite(v))? fmt(v)+' '+currentUnit : '? '+currentUnit;
-  const degLbl=angleDeg!==null?fmtD(angleDeg,2)+'°':'?';
+  const assessment = useMemo(() => {
+    if (!ok) return null;
+    const p = result.P;
+    if (p <= 6) return { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "Sehr flach – barrierefrei geeignet (≤ 6 %)" };
+    if (p <= 12) return { color: "#ca8a04", bg: "#fefce8", border: "#fde047", label: "Moderat – für viele Bauzwecke nutzbar (≤ 12 %)" };
+    if (p <= 20) return { color: "#ea580c", bg: "#fff7ed", border: "#fdba74", label: "Steil – nur eingeschränkt befahrbar (≤ 20 %)" };
+    return { color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", label: "Sehr steil – kritisch prüfen (> 20 %)" };
+  }, [ok, result]);
 
-  const ACC='#E08B10', DIM='rgba(255,255,255,0.06)', LINE='#555260', TXT='#908D83', ACC2='rgba(224,139,16,0.14)';
+  const normChecks = useMemo(() => {
+    if (!ok) return null;
+    const p = result.P;
+    return [
+      { name: "Barrierefrei (DIN 18040)", limit: 6, ok: p <= 6 },
+      { name: "Gehweg Längsneigung", limit: 6, ok: p <= 6 },
+      { name: "Garage Innenrampe", limit: 12, ok: p <= 12 },
+      { name: "Garage Außenrampe", limit: 15, ok: p <= 15 },
+      { name: "Feuerwehr-Zufahrt", limit: 10, ok: p <= 10 },
+    ];
+  }, [ok, result]);
 
-  svg.innerHTML=`
-    <!-- base line -->
-    <line x1="0" y1="${oy}" x2="${W}" y2="${oy}" stroke="${DIM}" stroke-width="1"/>
-    <line x1="${ox}" y1="0" x2="${ox}" y2="${H}" stroke="${DIM}" stroke-width="1"/>
+  // Querneigung auswerten
+  const cross = useMemo(() => {
+    const v = parseFloat(String(crossSlope).replace(",", ".").replace("%", "").trim());
+    if (isNaN(v)) return null;
+    let color = "#16a34a", bg = "#f0fdf4", border = "#bbf7d0", label = "";
+    if (v <= 2) { label = "Im barrierefreien/komfortablen Bereich (≤ 2 %)"; }
+    else if (v <= 2.5) { color = "#ca8a04"; bg = "#fefce8"; border = "#fde047"; label = "Gehweg-Grenzwert (≤ 2,5 %)"; }
+    else { color = "#dc2626"; bg = "#fef2f2"; border = "#fca5a5"; label = "Zu hoch – für barrierefreie Flächen unzulässig (> 2,5 %)"; }
+    const checks = [
+      { name: "Barrierefrei Rampe (DIN 18040)", limit: "0 %", ok: v === 0 },
+      { name: "Gehweg Querneigung", limit: "≤ 2,5 %", ok: v <= 2.5 },
+      { name: "Entwässerung (min.)", limit: "≥ 1,5 %", ok: v >= 1.5 },
+    ];
+    return { v, color, bg, border, label, checks };
+  }, [crossSlope]);
 
-    <!-- filled triangle -->
-    <polygon points="${ox},${oy} ${rx},${ry} ${tx},${ty}" fill="${ACC2}" stroke="none"/>
+  const fmt = (n, d = 1) =>
+    n == null || isNaN(n) ? "–" : n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-    <!-- hypotenuse (slope) -->
-    <line x1="${ox}" y1="${oy}" x2="${tx}" y2="${ty}" stroke="${ACC}" stroke-width="2.8" stroke-linecap="round"/>
+  const dispLen = (cm) => {
+    if (cm == null) return "–";
+    if (unit === "m") return fmt(round(cm / 100, 4), 2) + " m";
+    return fmt(round(cm, 2), 1) + " cm";
+  };
+  const dispLenShort = (cm) => {
+    if (cm == null) return "–";
+    if (unit === "m") return fmt(round(cm / 100, 4), 2) + " m";
+    return fmt(round(cm, 2), 0) + " cm";
+  };
 
-    <!-- run dashed -->
-    <line x1="${ox}" y1="${oy}" x2="${rx}" y2="${ry}" stroke="${LINE}" stroke-width="1.5" stroke-dasharray="5,3" stroke-linecap="round"/>
+  const presets = [
+    { label: "6 %", v: 6 },
+    { label: "1:12", v: (1 / 12) * 100 },
+    { label: "1:20", v: (1 / 20) * 100 },
+    { label: "10 %", v: 10 },
+    { label: "15 %", v: 15 },
+  ];
 
-    <!-- rise dashed -->
-    <line x1="${rx}" y1="${ry}" x2="${tx}" y2="${ty}" stroke="${LINE}" stroke-width="1.5" stroke-dasharray="5,3" stroke-linecap="round"/>
+  const applyPreset = (pctVal) => {
+    if (slopeUnit === "°") setSlope(round(pctToDeg(pctVal), 2) + " °");
+    else setSlope(round(pctVal, 2) + " %");
+  };
 
-    <!-- right angle mark -->
-    <polyline points="${rx-10},${ry} ${rx-10},${ry-10} ${rx},${ry-10}" fill="none" stroke="${LINE}" stroke-width="1.2"/>
+  const copyResult = () => {
+    if (!ok) return;
+    let txt = "Rampen-Berechnung\n";
+    if (projectName.trim()) txt += "Projekt:     " + projectName.trim() + "\n";
+    if (editor.trim()) txt += "Bearbeiter:  " + editor.trim() + "\n";
+    if (projectName.trim() || editor.trim()) txt += "\n";
+    txt += "Höhe:        " + dispLen(result.H) + "\n";
+    txt += "Länge:       " + dispLen(result.L) + "\n";
+    txt += "Neigung:     " + fmt(result.P, 2) + " %  /  " + fmt(result.angleDeg, 2) + " °\n";
+    txt += "Verhältnis:  " + (result.ratio ? "1 : " + fmt(result.ratio, 1) : "–") + "\n";
+    txt += "Rampenlauf:  " + dispLen(result.hyp) + "\n";
+    if (cross) txt += "Querneigung: " + fmt(cross.v, 2) + " %\n";
+    if (landing) {
+      txt += "\nPodeste:     " + landing.numLandings + " (Segmente: " + landing.segments + ")\n";
+      txt += "Gesamtlänge: " + dispLen(landing.totalLen) + " (inkl. Podeste)\n";
+    }
+    navigator.clipboard?.writeText(txt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
-    <!-- angle arc fill + stroke -->
-    <path d="M ${ox+arcR},${oy} A ${arcR},${arcR} 0 0,0 ${arcX2},${arcY2} L ${ox},${oy} Z"
-      fill="rgba(224,139,16,0.12)" stroke="none"/>
-    <path d="M ${ox+arcR},${oy} A ${arcR},${arcR} 0 0,0 ${arcX2},${arcY2}"
-      fill="none" stroke="${ACC}" stroke-width="1.8"/>
+  const exportPDF = () => {
+    if (!ok) return;
+    const today = new Date().toLocaleDateString("de-DE");
+    const row = (a, b) => "<tr><td style='padding:6px 0;color:#475569'>" + a + "</td><td style='padding:6px 0;text-align:right;font-weight:600;color:#0f172a'>" + b + "</td></tr>";
+    let rows = "";
+    rows += row("Höhe", dispLen(result.H));
+    rows += row("Länge (horizontal)", dispLen(result.L));
+    rows += row("Neigung", fmt(result.P, 2) + " %  /  " + fmt(result.angleDeg, 2) + " °");
+    rows += row("Verhältnis", result.ratio ? "1 : " + fmt(result.ratio, 1) : "–");
+    rows += row("Rampenlauf (schräg)", dispLen(result.hyp));
+    if (cross) rows += row("Querneigung", fmt(cross.v, 2) + " %");
+    let landingRows = "";
+    if (landing) {
+      landingRows += row("Segmente", String(landing.segments));
+      landingRows += row("Zwischenpodeste", String(landing.numLandings));
+      landingRows += row("Gesamtlänge inkl. Podeste", dispLen(landing.totalLen));
+    }
+    const svgEl = document.getElementById("ramp-svg");
+    const svgMarkup = svgEl ? new XMLSerializer().serializeToString(svgEl) : "";
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let meta = "Exportdatum: " + today;
+    if (editor.trim()) meta += " · Bearbeiter: " + esc(editor.trim());
+    const titleLine = projectName.trim() ? esc(projectName.trim()) : "Rampen- & Neigungs-Berechnung";
+    const html =
+      "<!doctype html><html><head><meta charset='utf-8'><title>" + esc(titleLine) + "</title>" +
+      "<style>body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:40px;}h1{font-size:20px;margin:0 0 4px;}" +
+      ".sub{color:#64748b;font-size:13px;margin-bottom:24px;}h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:24px 0 8px;}" +
+      "table{width:100%;border-collapse:collapse;font-size:14px;}.graphic{margin:12px 0;max-width:480px;}.foot{margin-top:32px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px;}" +
+      ".printbtn{display:inline-block;margin-bottom:20px;padding:10px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}" +
+      "@media print{.printbtn{display:none;}body{margin:0;}}</style></head><body>" +
+      "<button class='printbtn' onclick='window.print()'>Drucken / Als PDF speichern</button>" +
+      "<h1>" + esc(titleLine) + "</h1><div class='sub'>" + meta + "</div>" +
+      "<div class='graphic'>" + svgMarkup + "</div>" +
+      "<h2>Ergebnis</h2><table>" + rows + "</table>" +
+      (landingRows ? "<h2>Podeste</h2><table>" + landingRows + "</table>" : "") +
+      "<div class='foot'>Richtwerte zur Orientierung. Verbindliche Vorgaben (z. B. DIN 18040, Landesbauordnung) im Einzelfall prüfen.</div>" +
+      "</body></html>";
 
-    <!-- angle label -->
-    <text x="${ox+arcR+10}" y="${oy-arcR*0.3}"
-      fill="${ACC}" font-family="JetBrains Mono,monospace" font-size="13" font-weight="600">${degLbl}</text>
+    // Download als HTML-Datei (Sandbox-sicher) – Datei öffnen und via Drucken als PDF sichern
+    const safeName = (projectName.trim() || "Rampen-Berechnung").replace(/[^\wäöüÄÖÜß \-]/g, "").trim().replace(/\s+/g, "_");
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = safeName + ".html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
-    <!-- run label -->
-    <text x="${(ox+rx)/2}" y="${oy+17}"
-      fill="${TXT}" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle">${fmtL(run)}</text>
-    <text x="${(ox+rx)/2}" y="${oy+30}"
-      fill="${LINE}" font-family="Barlow Condensed,sans-serif" font-size="9" letter-spacing="0.12em" text-anchor="middle">HORIZ. LÄNGE</text>
+  const clearAll = () => { setHeight(""); setLength(""); setSlope(""); };
 
-    <!-- rise label -->
-    <text x="${rx+10}" y="${(ry+ty)/2+4}"
-      fill="${TXT}" font-family="JetBrains Mono,monospace" font-size="10">${fmtL(rise)}</text>
-    <text x="${rx+10}" y="${(ry+ty)/2+17}"
-      fill="${LINE}" font-family="Barlow Condensed,sans-serif" font-size="9" letter-spacing="0.12em">HÖHE</text>
+  const svg = useMemo(() => {
+    if (!ok) return null;
+    const padX = 56, padTop = 24, padBot = 36, w = 520, h = 220;
+    const drawW = w - padX * 2, drawH = h - padTop - padBot;
+    const scale = Math.min(drawW / result.L, drawH / Math.max(result.H, 0.0001));
+    const lPx = result.L * scale, hPx = result.H * scale;
+    const x0 = padX, y0 = h - padBot, x1 = x0 + lPx, y1 = y0 - hPx;
+    return { w, h, x0, y0, x1, y1 };
+  }, [ok, result]);
 
-    <!-- hyp label -->
-    <text x="${(ox+tx)/2-14}" y="${(oy+ty)/2-10}"
-      fill="${ACC}" font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle">${fmtL(hyp)}</text>
-    <text x="${(ox+tx)/2-14}" y="${(oy+ty)/2+3}"
-      fill="rgba(224,139,16,0.5)" font-family="Barlow Condensed,sans-serif" font-size="8" letter-spacing="0.12em" text-anchor="middle">SCHRÄGLÄNGE</text>
+  const inputBase =
+    "w-full px-3 py-2.5 rounded-lg border bg-white text-slate-800 text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition";
+  const labelClass = "block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5";
 
-    <!-- dots at vertices -->
-    <circle cx="${ox}" cy="${oy}" r="4" fill="${ACC}"/>
-    <circle cx="${rx}" cy="${ry}" r="3" fill="${LINE}"/>
-    <circle cx="${tx}" cy="${ty}" r="3" fill="${LINE}"/>
-  `;
-}
+  const h_ = parseLength(height) != null;
+  const l_ = parseLength(length) != null;
+  const p_ = parseSlope(slope) != null;
 
-/* ── STATUS / NORMS ── */
-function updateStatus(deg, pct){
-  const dot=document.getElementById('sdot');
-  const txt=document.getElementById('stext');
-  const bdg=document.getElementById('sbadges');
+  const usedFields = useMemo(() => {
+    if (h_ && l_) return { height: true, length: true, slope: false };
+    if (h_ && p_) return { height: true, length: false, slope: true };
+    if (l_ && p_) return { height: false, length: true, slope: true };
+    return { height: h_, length: l_, slope: p_ };
+  }, [h_, l_, p_]);
 
-  if(deg===null||pct===null){
-    dot.style.background='var(--text-dim)';
-    txt.textContent='Bitte einen Wert eingeben, um die Berechnung zu starten.';
-    bdg.innerHTML='';
-    return;
-  }
+  const fieldBorder = (active) => (active ? "border-blue-400 bg-blue-50/40" : "border-slate-300");
+  const overfilled = h_ && l_ && p_;
+  const fieldBorderCalc = (active, computedVal, filled) => {
+    if (overfilled && filled) return "border-red-400 bg-red-50/50";
+    if (active) return "border-blue-400 bg-blue-50/40";
+    if (computedVal) return "border-green-400 bg-green-50/40";
+    return "border-slate-300";
+  };
 
-  dot.style.background='var(--accent)';
-  let msgs=[], badges='';
+  const computed = useMemo(() => {
+    if (!ok) return { height: null, length: null, slope: null };
+    let slopeStr = null;
+    if (!usedFields.slope) {
+      slopeStr = slopeUnit === "°" ? fmt(result.angleDeg, 2) + " °" : fmt(result.P, 2) + " %";
+    }
+    return {
+      height: !usedFields.height ? dispLen(result.H) : null,
+      length: !usedFields.length ? dispLen(result.L) : null,
+      slope: slopeStr,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ok, result, usedFields, unit, slopeUnit]);
 
-  // Barrierefreiheit
-  if(pct<=6){
-    msgs.push('✓ Barrierefrei nach DIN 18040');
-    badges+=`<span class="sbadge ok">♿ Barrierefrei ✓</span>`;
-  } else {
-    badges+=`<span class="sbadge no">♿ Zu steil</span>`;
-  }
+  const overlayClass =
+    "pointer-events-none absolute inset-0 flex items-center justify-end px-3 text-lg font-medium text-green-600 italic";
 
-  // Garagenrampe
-  if(pct<=15) badges+=`<span class="sbadge ok">🚗 Garage ✓</span>`;
-  else badges+=`<span class="sbadge no">🚗 Garage ✗</span>`;
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 flex items-start justify-center font-sans">
+      <div className="w-full max-w-3xl">
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-slate-800">Rampen- & Neigungs-Rechner</h1>
+          <p className="text-sm text-slate-500 mt-1">Berechnung & Norm-Richtwerte für die Baupraxis.</p>
+        </div>
 
-  // Dachneigung
-  if(deg>=2&&deg<5) badges+=`<span class="sbadge warn">Flachdach</span>`;
-  else if(deg>=5&&deg<22) badges+=`<span class="sbadge ok">Pultdach</span>`;
-  else if(deg>=22&&deg<=50) badges+=`<span class="sbadge ok">Satteldach ✓</span>`;
-  else if(deg>50) badges+=`<span class="sbadge warn">Steildach</span>`;
+        <div className="flex gap-1.5 mb-5 border-b border-slate-200">
+          {[
+            { id: "calc", label: "Rechner" },
+            { id: "reference", label: "Norm-Richtwerte" },
+          ].map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
+                tab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-  // Feuerwehr
-  if(pct<=10) badges+=`<span class="sbadge ok">🚒 FW-Zufahrt ✓</span>`;
-  else badges+=`<span class="sbadge no">🚒 FW-Zufahrt ✗</span>`;
+        {tab === "calc" && (
+          <>
+            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 pb-4 border-b border-slate-100">
+                <div>
+                  <label className={labelClass}>Projekt</label>
+                  <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="z.B. Neubau Bürogebäude Süd"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+                </div>
+                <div>
+                  <label className={labelClass}>Bearbeiter</label>
+                  <input type="text" value={editor} onChange={(e) => setEditor(e.target.value)}
+                    placeholder="z.B. M. Mustermann"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-slate-500">Beliebige <span className="font-semibold text-slate-700">zwei</span> Felder ausfüllen – das dritte wird berechnet.</p>
+                <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+                  {["cm", "m"].map((u) => (
+                    <button key={u} onClick={() => setUnit(u)}
+                      className={`px-3 py-1 rounded-md text-sm font-semibold transition ${unit === u ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-200"}`}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-  // General assessment
-  if(pct<=2) msgs.push('Sehr flach — ideal für Entwässerungsgefälle.');
-  else if(pct<=6) msgs.push('Leichte Neigung — geeignet für barrierefreie Rampen.');
-  else if(pct<=15) msgs.push('Moderate Neigung — typisch für Zufahrtsrampen und Pultdächer.');
-  else if(pct<=50) msgs.push('Steile Neigung — Bereich Satteldach / steile Rampen.');
-  else if(deg<=90) msgs.push('Sehr steile Neigung — Stützkonstruktion oder Geländer erforderlich.');
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className={labelClass}>Höhe</label>
+                  <div className="relative">
+                    <input type="text" value={height} onChange={(e) => setHeight(e.target.value)}
+                      placeholder={unit === "m" ? "z.B. 0.3 m" : "z.B. 30"}
+                      className={`${inputBase} ${fieldBorderCalc(usedFields.height, computed.height, h_)}`} />
+                    {!height && computed.height && !overfilled && <span className={overlayClass}>{computed.height}</span>}
+                  </div>
+                </div>
 
-  txt.textContent=msgs.join(' ');
-  bdg.innerHTML=badges;
-}
+                <div>
+                  <label className={labelClass}>Länge (horizontal)</label>
+                  <div className="relative">
+                    <input type="text" value={length} onChange={(e) => setLength(e.target.value)}
+                      placeholder={unit === "m" ? "z.B. 3.6 m" : "z.B. 360"}
+                      className={`${inputBase} ${fieldBorderCalc(usedFields.length, computed.length, l_)}`} />
+                    {!length && computed.length && !overfilled && <span className={overlayClass}>{computed.length}</span>}
+                  </div>
+                </div>
 
-/* ── UNIT ── */
-function setUnit(u, btn){
-  document.querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  currentUnit=u;
-  ['run','rise','hyp'].forEach(id=>document.getElementById('unit-'+id).textContent=u);
-  // Redraw SVG with new unit label (no recalculation needed)
-  drawSVG(
-    parseFloat(document.getElementById('inp-deg').value)||null,
-    parseFloat(document.getElementById('inp-run').value)||null,
-    parseFloat(document.getElementById('inp-rise').value)||null,
-    parseFloat(document.getElementById('inp-hyp').value)||null
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Neigung</label>
+                    <div className="flex gap-0.5 bg-slate-100 rounded p-0.5">
+                      {["%", "°"].map((u) => (
+                        <button key={u} onClick={() => switchSlopeUnit(u)}
+                          className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${slopeUnit === u ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}>
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input type="text" value={slope} onChange={(e) => setSlope(e.target.value)}
+                      placeholder={slopeUnit === "°" ? "z.B. 5 °" : "z.B. 8"}
+                      className={`${inputBase} ${fieldBorderCalc(usedFields.slope, computed.slope, p_)}`} />
+                    {!slope && computed.slope && !overfilled && <span className={overlayClass}>{computed.slope}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {overfilled && (
+                <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
+                  <span className="text-red-500 font-bold text-base leading-none">!</span>
+                  <p className="text-sm font-medium text-red-600">
+                    Es dürfen nur 2 von 3 Feldern ausgefüllt sein. Bitte ein Feld leeren, um die Berechnung zu starten.
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center flex-wrap gap-2">
+                <span className="text-xs text-slate-400">Schnellauswahl:</span>
+                {presets.map((p) => (
+                  <button key={p.label} onClick={() => applyPreset(p.v)}
+                    className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-sm font-semibold border border-slate-200 transition">
+                    {p.label}
+                  </button>
+                ))}
+                <button onClick={clearAll}
+                  className="ml-auto px-3 py-1 rounded-lg text-slate-400 hover:text-slate-600 text-sm font-medium transition">
+                  Zurücksetzen
+                </button>
+              </div>
+
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                {ok && svg ? (
+                  <svg id="ramp-svg" viewBox={`0 0 ${svg.w} ${svg.h}`} className="w-full">
+                    <line x1={svg.x0} y1={svg.y0} x2={svg.x1} y2={svg.y0} stroke="#cbd5e1" strokeWidth="2" />
+                    <line x1={svg.x1} y1={svg.y0} x2={svg.x1} y2={svg.y1} stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 3" />
+                    <polygon points={`${svg.x0},${svg.y0} ${svg.x1},${svg.y0} ${svg.x1},${svg.y1}`} fill="#2563eb" fillOpacity="0.08" />
+                    <line x1={svg.x0} y1={svg.y0} x2={svg.x1} y2={svg.y1} stroke="#2563eb" strokeWidth="3" />
+                    <path d={`M ${svg.x0 + 30} ${svg.y0} A 30 30 0 0 0 ${svg.x0 + 30 * Math.cos(result.angleDeg * Math.PI / 180)} ${svg.y0 - 30 * Math.sin(result.angleDeg * Math.PI / 180)}`} fill="none" stroke="#2563eb" strokeWidth="1.5" />
+                    <text x={svg.x0 + 36} y={svg.y0 - 9} fontSize="13" fill="#2563eb" fontWeight="700">{fmt(result.angleDeg, 1)}°</text>
+                    <text x={(svg.x0 + svg.x1) / 2} y={svg.y0 + 22} fontSize="12" fill="#64748b" textAnchor="middle">Länge {dispLenShort(result.L)}</text>
+                    <text x={svg.x1 + 8} y={(svg.y0 + svg.y1) / 2} fontSize="12" fill="#64748b">H {dispLenShort(result.H)}</text>
+                  </svg>
+                ) : (
+                  <div className="h-32 flex items-center justify-center text-slate-300 text-sm">
+                    Live-Vorschau erscheint, sobald zwei Werte eingegeben sind
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {ok ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  <ResultTile label="Neigung" value={fmt(result.P, 2) + " %"} accent />
+                  <ResultTile label="Winkel" value={fmt(result.angleDeg, 2) + "°"} />
+                  <ResultTile label="Verhältnis" value={result.ratio ? "1 : " + fmt(result.ratio, 1) : "–"} />
+                  <ResultTile label="Rampenlauf" value={dispLen(result.hyp)} sub="schräge Länge" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <MiniTile label="Höhe" value={dispLen(result.H)} />
+                  <MiniTile label="Länge" value={dispLen(result.L)} />
+                  <MiniTile label="Neigung °/%" value={fmt(result.angleDeg, 1) + "° · " + fmt(result.P, 1) + "%"} />
+                </div>
+
+                {assessment && (
+                  <div className="rounded-xl p-4 mb-4 border flex items-center gap-3" style={{ background: assessment.bg, borderColor: assessment.border }}>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: assessment.color }} />
+                    <p className="text-sm font-semibold" style={{ color: assessment.color }}>{assessment.label}</p>
+                  </div>
+                )}
+
+                {normChecks && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+                    <p className={labelClass}>Norm-Abgleich (Längsneigung)</p>
+                    <div className="space-y-2 mt-2">
+                      {normChecks.map((c) => (
+                        <div key={c.name} className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">{c.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 text-xs">≤ {c.limit} %</span>
+                            <span className={`font-bold px-2 py-0.5 rounded text-xs ${c.ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                              {c.ok ? "✓ erfüllt" : "✗ überschritten"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+                  <p className={labelClass}>Querneigung (optional)</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-32">
+                      <input type="text" value={crossSlope} onChange={(e) => setCrossSlope(e.target.value)}
+                        placeholder="z.B. 2"
+                        className="w-full px-3 py-2.5 pr-8 rounded-lg border border-slate-300 bg-white text-slate-800 text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">%</span>
+                    </div>
+                    {cross && (
+                      <p className="text-sm font-semibold flex-1" style={{ color: cross.color }}>{cross.label}</p>
+                    )}
+                  </div>
+                  {cross && (
+                    <div className="space-y-2 mt-4 pt-4 border-t border-slate-100">
+                      {cross.checks.map((c) => (
+                        <div key={c.name} className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">{c.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 text-xs">{c.limit}</span>
+                            <span className={`font-bold px-2 py-0.5 rounded text-xs ${c.ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                              {c.ok ? "✓ erfüllt" : "✗ nicht erfüllt"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-400 mt-3">
+                    Quergefälle senkrecht zur Laufrichtung. Bei barrierefreien Rampen unzulässig; Gehwege max. 2,5 %; für Entwässerung min. ~1,5 %.
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className={labelClass + " mb-0"}>Podest-Berechnung</p>
+                    <button onClick={() => setShowLanding(!showLanding)}
+                      className={`relative w-11 h-6 rounded-full transition ${showLanding ? "bg-blue-600" : "bg-slate-300"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${showLanding ? "translate-x-5" : ""}`} />
+                    </button>
+                  </div>
+                  {showLanding && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Max. Lauflänge bis Podest (cm)</label>
+                          <input type="text" value={maxRun} onChange={(e) => setMaxRun(e.target.value)}
+                            className="w-full px-2.5 py-2 rounded-lg border border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Podestlänge (cm)</label>
+                          <input type="text" value={landingLen} onChange={(e) => setLandingLen(e.target.value)}
+                            className="w-full px-2.5 py-2 rounded-lg border border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      </div>
+                      {landing && (
+                        <div className="grid grid-cols-3 gap-3">
+                          <MiniTile label="Segmente" value={String(landing.segments)} />
+                          <MiniTile label="Podeste nötig" value={String(landing.numLandings)} />
+                          <MiniTile label="Gesamtlänge" value={dispLen(landing.totalLen)} />
+                        </div>
+                      )}
+                      {landing && landing.numLandings > 0 && (
+                        <p className="text-xs text-amber-600 mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Rampe überschreitet die max. Lauflänge → {landing.numLandings} Zwischenpodest{landing.numLandings > 1 ? "e" : ""} empfohlen.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                  <button onClick={copyResult}
+                    className="py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold transition shadow-sm">
+                    {copied ? "✓ Kopiert!" : "Ergebnis kopieren"}
+                  </button>
+                  <button onClick={exportPDF}
+                    className="py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition shadow-sm">
+                    Protokoll herunterladen
+                  </button>
+                </div>
+              </>
+            ) : result.status === "error" ? (
+              <div className="bg-red-50 rounded-xl border border-red-200 p-5 text-center text-red-500 text-sm">{result.msg}</div>
+            ) : result.status === "overfilled" ? (
+              <div className="bg-red-50 rounded-xl border border-red-200 p-6 text-center text-red-500 text-sm font-medium">
+                Zu viele Werte – bitte nur 2 von 3 Feldern ausfüllen.
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-dashed border-slate-300 p-6 text-center text-slate-400 text-sm">
+                Gib zwei beliebige Werte ein, um die Berechnung zu starten.
+              </div>
+            )}
+
+            <p className="text-xs text-slate-400 mt-5 text-center">
+              Richtwerte zur Orientierung. Verbindliche Vorgaben (z. B. DIN 18040, Landesbauordnung) im Einzelfall prüfen.
+            </p>
+          </>
+        )}
+
+        {tab === "reference" && <ReferenceTable />}
+      </div>
+    </div>
   );
 }
 
-/* ── RESET ── */
-function resetAll(){
-  userFields.clear();
-  ['deg','pct','ratio','run','rise','hyp'].forEach(f=>{
-    const el=document.getElementById('inp-'+f);
-    el.value=''; el.classList.remove('computed');
-  });
-  ['disp-deg','disp-pct','disp-ratio'].forEach(id=>{
-    document.getElementById(id).textContent='—';
-    document.getElementById(id).classList.add('na');
-  });
-  document.getElementById('sdot').style.background='var(--text-dim)';
-  document.getElementById('stext').textContent='Bitte einen Wert eingeben, um die Berechnung zu starten.';
-  document.getElementById('sbadges').innerHTML='';
-  document.getElementById('gauge-marker').style.display='none';
-  document.getElementById('gauge-readout').textContent='— keine Eingabe —';
-  document.getElementById('gauge-readout').style.color='';
-  drawSVG(null,null,null,null);
+function ReferenceTable() {
+  const cards = [
+    {
+      icon: "♿", title: "Barrierefreiheit – DIN 18040", accent: "#2563eb", chip: "bg-blue-50 text-blue-600",
+      rows: [
+        ["Max. Neigung (Rampenlauf)", "≤ 6 %", "3,43°"],
+        ["Max. Länge je Abschnitt", "6,00 m", null],
+        ["Mindestbreite (nutzbar)", "≥ 1,20 m", null],
+        ["Podest-/Bewegungsfläche", "≥ 1,50 m", null],
+        ["Querneigung", "0 % (unzulässig)", null],
+      ],
+      note: "Zwischenpodest bei Richtungsänderung oder ab 6 m. Bewegungsfläche 1,50 × 1,50 m an Anfang/Ende. Beidseitige Handläufe empfohlen.",
+    },
+    {
+      icon: "🚗", title: "Garagen & Stellplätze", accent: "#ca8a04", chip: "bg-amber-50 text-amber-600",
+      rows: [
+        ["Innenrampe (max.)", "≤ 12 %", "6,84°"],
+        ["Außenrampe (max.)", "≤ 15 %", "8,53°"],
+        ["Kurvenbereich", "≤ 10 %", null],
+        ["Übergangsgefälle", "≤ 8 %", null],
+        ["Behindertenstellplatz", "≤ 2 %", null],
+      ],
+      note: "Richtwerte aus den Garagenverordnungen (GarVO) der Länder. Übergangsbereiche ausrunden, um Aufsetzen zu vermeiden.",
+    },
+    {
+      icon: "🚒", title: "Feuerwehrzufahrt", accent: "#dc2626", chip: "bg-red-50 text-red-600",
+      rows: [
+        ["Max. Längsneigung", "≤ 10 %", "5,71°"],
+        ["Mindestbreite Fahrbahn", "≥ 3,00 m", null],
+        ["Lichte Höhe", "≥ 3,50 m", null],
+        ["Aufstellfläche (Neigung)", "≤ 5 %", null],
+      ],
+      note: "VwV zur LBO sowie DIN 14090. Regionale Bauordnungen prüfen!",
+    },
+    {
+      icon: "🚶", title: "Fußwege & Freiräume", accent: "#16a34a", chip: "bg-green-50 text-green-600",
+      rows: [
+        ["Komfort / Barrierefreiheit", "≤ 2 %", null],
+        ["Gehweg Längsneigung", "≤ 6 %", null],
+        ["Gehweg Querneigung", "≤ 2,5 %", null],
+        ["Kurzzeitig (mit Geländer)", "≤ 20 %", null],
+        ["Terrassengefälle (min.)", "1,5–2 %", null],
+      ],
+      note: "Bei Längsneigung > 3 % als Rampe ausführen. Bis 10 m Zugangslänge sind 4 % zulässig (DIN 18040-1).",
+    },
+  ];
+
+  return (
+    <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {cards.map((card) => (
+          <div key={card.title} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-lg">{card.icon}</span>
+              <h3 className="text-sm font-bold" style={{ color: card.accent }}>{card.title}</h3>
+            </div>
+            <div>
+              {card.rows.map((r, i) => (
+                <div key={i} className={`flex items-center justify-between py-2.5 ${i < card.rows.length - 1 ? "border-b border-slate-100" : ""}`}>
+                  <span className="text-sm text-slate-600">{r[0]}</span>
+                  <span className="flex items-baseline gap-2">
+                    <span className={`text-sm font-bold px-2 py-0.5 rounded ${card.chip}`}>{r[1]}</span>
+                    {r[2] && <span className="text-xs text-slate-400 font-mono w-12 text-right">{r[2]}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs mt-4 leading-relaxed text-slate-400">{card.note}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs mt-5 text-center text-slate-400">
+        Orientierungswerte. Maßgeblich sind die aktuell gültige DIN 18040, Landesbauordnung sowie Garagen- und Sonderbauverordnungen.
+      </p>
+    </div>
+  );
 }
 
-/* ── TABS ── */
-function showTab(name, btn){
-  document.querySelectorAll('.ref-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.ref-panel').forEach(p=>p.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
+function ResultTile({ label, value, sub, accent }) {
+  return (
+    <div className={`rounded-xl p-3.5 border ${accent ? "bg-blue-600 border-blue-600" : "bg-white border-slate-200"} shadow-sm`}>
+      <p className={`text-xs font-semibold uppercase tracking-wide ${accent ? "text-blue-100" : "text-slate-500"}`}>{label}</p>
+      <p className={`text-xl font-bold mt-1 ${accent ? "text-white" : "text-slate-800"}`}>{value}</p>
+      {sub && <p className={`text-xs mt-0.5 ${accent ? "text-blue-100" : "text-slate-400"}`}>{sub}</p>}
+    </div>
+  );
 }
 
-/* ── INIT ── */
-drawSVG(null,null,null,null);
-</script>
-</body>
-</html>
+function MiniTile({ label, value }) {
+  return (
+    <div className="rounded-lg p-2.5 bg-slate-100 border border-slate-200">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="text-base font-semibold text-slate-700">{value}</p>
+    </div>
+  );
+}
